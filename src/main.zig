@@ -320,3 +320,63 @@ test "multi-threaded shuffling allocator example usage" {
 
     for (ptr, 0..) |b, i| std.debug.assert(b == i);
 }
+
+test "map" {
+    const gpa = std.heap.page_allocator;
+    const shuffler = ShufflingAllocator.create(gpa, 42);
+    const alloc = shuffler.base;
+
+    var hm = std.AutoHashMap(u32, u32).init(
+        alloc,
+    );
+    defer hm.deinit();
+
+    try hm.put(1, 2);
+    try hm.put(5, 3);
+    // done, dropping happens via `defer hm.deinit()`
+
+    try std.testing.expectEqual(hm.get(1).?, 2);
+    try std.testing.expectEqual(hm.get(5).?, 3);
+}
+
+test "strings" {
+    const gpa = std.heap.page_allocator;
+    const shuffler = ShufflingAllocator.create(gpa, 123);
+    var alloc = shuffler.base;
+
+    const text = try std.fmt.allocPrintZ(alloc, "foo, bar, {s}", .{"baz"});
+    defer alloc.free(text);
+
+    const want = "foo, bar, baz";
+    try std.testing.expectEqualStrings(want, text);
+}
+
+test "test_larger_than_word_alignment" {
+    const gpa = std.heap.page_allocator;
+    const shuffler = ShufflingAllocator.create(gpa, 0);
+    const alloc = shuffler.base;
+
+    inline for (0..100) |_| {
+        // Align to 32 bytes
+        const ptr = try std.mem.Allocator.alignedAlloc(alloc, u8, 32, 1);
+        defer alloc.free(ptr);
+
+        std.debug.assert(@intFromPtr(ptr.ptr) % 32 == 0);
+        ptr[0] = 42;
+    }
+}
+
+test "many_small_allocs" {
+    const page_alloc = std.heap.page_allocator;
+    const shuffler = ShufflingAllocator.create(page_alloc, 12345);
+    const alloc = shuffler.base;
+
+    const n = 16;
+    const ptr_u32 = try alloc.alloc(u32, n);
+    defer alloc.free(ptr_u32);
+
+    // If we want to store loop index (usize) into a u32:
+    for (ptr_u32, 0..) |*slot, i| {
+        slot.* = @truncate(i);
+    }
+}
