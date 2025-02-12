@@ -29,9 +29,9 @@ const ShufflingAllocator = @import("shuffling_allocator").ShufflingAllocator;
 ## API Reference
 This is the primary type in this package, implementing the standard `std.mem.Allocator` interface, with the following methods:
 
-`alloc`: Allocates memory with randomized placement. If the memory size is too large for shuffling, it falls back to standard allocation.
-`free`: Frees the memory, also randomizing its location in the heap.
-`resize`: Resizes the allocated memory without applying shuffling.
-`remap`: Remaps the memory without applying shuffling.
+- `alloc`: Allocates memory with randomized placement. If the memory size is too large for shuffling, it falls back to standard allocation.
+- `free`: Frees the memory, also randomizing its location in the heap.
+- `resize`: Resizes the allocated memory without applying shuffling.
+- `remap`: Remaps the memory without applying shuffling.
 
 Inspired by https://github.com/fitzgen/shuffling-allocator
