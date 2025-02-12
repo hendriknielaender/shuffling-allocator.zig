@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const lib = b.addStaticLibrary(.{
-        .name = "shuffling-allocator.",
+        .name = "shuffling-allocator",
         .root_source_file = b.path("src/shuffling-allocator.zig"),
         .target = target,
         .optimize = optimize,
