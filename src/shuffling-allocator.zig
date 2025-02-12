@@ -33,7 +33,6 @@ pub const ShufflingAllocator = struct {
         seed: u64,
     ) ShufflingAllocator {
         var self = ShufflingAllocator{
-            // We’ll fill the vtable in a moment, and fix .ptr last:
             .base = .{ .ptr = undefined, .vtable = &ShufflingAllocator.vtable },
             .underlying = underlying,
             .rng_state = seed,
