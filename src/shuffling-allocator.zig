@@ -74,8 +74,7 @@ pub const ShufflingAllocator = struct {
         const tmp: *align(@alignOf(ShufflingAllocator)) anyopaque = @alignCast(self_ptr);
         const self: *ShufflingAllocator = @ptrCast(tmp);
 
-        // Tiger Style: we assert function arguments as needed:
-        // But std.mem.Allocator doesn’t promise len>0, so we do a quick check.
+        // std.mem.Allocator doesn’t promise len>0, so we do a quick check.
         if (len == 0) return &[_]u8{}; // Zero-length slice.
 
         // If alignment > size_of(usize), skip shuffling => fallback:
@@ -123,13 +122,13 @@ pub const ShufflingAllocator = struct {
         ) orelse return null;
 
         // Swap with the random slot:
-        const old_ptr = sc.ptrs[rand_i]; // type is `?[*]u8`
+        const old_ptr = sc.ptrs[rand_i];
         if (old_ptr == null) {
-            return new_ptr; // also `[*]u8`
+            return new_ptr;
         } else {
             // unwrap
             const non_null_ptr = old_ptr.?;
-            return non_null_ptr; // type is `[*]u8`
+            return non_null_ptr;
         }
 
         sc.ptrs[rand_i] = new_ptr;
@@ -293,7 +292,7 @@ fn sizeClassIndex(len: usize) ?usize {
     return null;
 }
 
-/// A linear congruential generator. Tiger Style: we handle random state
+/// A linear congruential generator. We handle random state
 /// with a single function to keep it minimal. We do not do recursion or
 /// fancy abstractions, just a direct approach.
 fn randomIndex(state_ptr: *u64) u8 {
