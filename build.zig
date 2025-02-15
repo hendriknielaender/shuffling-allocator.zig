@@ -1,10 +1,12 @@
 const std = @import("std");
 
-const version = std.SemanticVersion{ .major = 0, .minor = 1, .patch = 0 };
+const version = std.SemanticVersion{ .major = 0, .minor = 1, .patch = 2 };
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    _ = b.addModule("shuffling-allocator", .{ .root_source_file = b.path("src/shuffling-allocator.zig") });
 
     const lib = b.addStaticLibrary(.{
         .name = "shuffling-allocator",
