@@ -54,6 +54,18 @@ pub const ShufflingAllocator = struct {
         return self;
     }
 
+    pub fn allocator(self: *ShufflingAllocator) Allocator {
+        return .{
+            .ptr = self,
+            .vtable = &.{
+                .alloc = allocFn,
+                .resize = resizeFn,
+                .remap = remapFn,
+                .free = freeFn,
+            },
+        };
+    }
+
     /// The standard VTable with function pointers for Allocator calls.
     const vtable: std.mem.Allocator.VTable = .{
         .alloc = allocFn,
