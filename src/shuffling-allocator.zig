@@ -1,6 +1,7 @@
 //! A multi-threaded "shuffling" allocator for Zig,
 //! implementing the standard `std.mem.Allocator` interface.
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 pub const ShufflingAllocator = struct {
     /// The Allocator we expose to user code.
