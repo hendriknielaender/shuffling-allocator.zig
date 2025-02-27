@@ -66,14 +66,13 @@ pub const ShufflingAllocator = struct {
             defer self.size_class_mutexes[i].unlock();
 
             if (self.size_classes[i].active) {
-                for (self.size_classes[i].ptrs, 0..) |entry, j| {
+                for (self.size_classes[i].ptrs) |entry| {
                     if (entry) |slot| {
+                        // Free all memory that hasn't been properly freed yet
                         if (!slot.is_freed) {
-                            // Only free memory that hasn't been freed by the application
                             std.mem.Allocator.rawFree(self.underlying, slot.ptr[0..self.size_classes[i].size_class], std.mem.Alignment.@"8", // Use a reasonable default
                                 @returnAddress());
                         }
-                        self.size_classes[i].ptrs[j] = null;
                     }
                 }
             }
@@ -219,14 +218,16 @@ pub const ShufflingAllocator = struct {
 
         // Find the pointer in our shuffle array to mark it as freed
         var ptr_found = false;
+        var slot_index: usize = 0;
         for (sc.ptrs, 0..) |entry, i| {
             if (entry) |slot| {
                 if (slot.ptr == memory.ptr) {
-                    // Found the pointer - mark it as freed but don't actually free it yet
+                    // Found the pointer - mark it as freed
                     var updated_slot = slot;
                     updated_slot.is_freed = true;
                     sc.ptrs[i] = updated_slot;
                     ptr_found = true;
+                    slot_index = i;
                     break;
                 }
             }
