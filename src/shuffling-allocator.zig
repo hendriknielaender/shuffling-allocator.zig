@@ -56,6 +56,7 @@ pub const ShufflingAllocator = struct {
     }
 
     pub fn deinit(self: *ShufflingAllocator) void {
+        // Clean up any memory still in the shuffle arrays
         inline for (0..NUM_SIZE_CLASSES) |i| {
             self.size_class_mutexes[i].lock();
             defer self.size_class_mutexes[i].unlock();
@@ -64,7 +65,11 @@ pub const ShufflingAllocator = struct {
                 for (self.size_classes[i].ptrs, 0..) |ptr, j| {
                     if (ptr != null) {
                         const actual_ptr = ptr.?;
-                        std.mem.Allocator.rawFree(self.underlying, actual_ptr[0..self.size_classes[i].size_class], .{ .alignment = @alignOf(usize) }, @returnAddress());
+
+                        // Use a reasonable alignment for cleanup
+                        const default_align = std.mem.Alignment.@"8";
+
+                        std.mem.Allocator.rawFree(self.underlying, actual_ptr[0..self.size_classes[i].size_class], default_align, @returnAddress());
                         self.size_classes[i].ptrs[j] = null;
                     }
                 }
@@ -385,7 +390,8 @@ test "test_larger_than_word_alignment" {
 
 test "many_small_allocs" {
     const page_alloc = std.heap.page_allocator;
-    const shuffler = ShufflingAllocator.create(page_alloc, 12345);
+    var shuffler = ShufflingAllocator.create(page_alloc, 12345);
+    defer shuffler.deinit();
     const alloc = shuffler.base;
 
     const n = 16;
