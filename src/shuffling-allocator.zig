@@ -66,12 +66,21 @@ pub const ShufflingAllocator = struct {
             defer self.size_class_mutexes[i].unlock();
 
             if (self.size_classes[i].active) {
-                for (self.size_classes[i].ptrs) |entry| {
+                for (0..SHUFFLE_CAPACITY) |j| {
+                    const entry = self.size_classes[i].ptrs[j];
                     if (entry) |slot| {
-                        // Free ALL memory, regardless of freed status
-                        std.mem.Allocator.rawFree(self.underlying, slot.ptr[0..self.size_classes[i].size_class], std.mem.Alignment.@"8", @returnAddress());
+                        // Free the memory regardless of is_freed status
+                        // This ensures we don't leak any memory
+                        std.mem.Allocator.rawFree(self.underlying, slot.ptr[0..self.size_classes[i].size_class], std.mem.Alignment.@"8", // Default alignment
+                            @returnAddress());
+
+                        // Clear the slot to prevent double-frees
+                        self.size_classes[i].ptrs[j] = null;
                     }
                 }
+
+                // Mark the size class as inactive
+                self.size_classes[i].active = false;
             }
         }
     }
