@@ -55,6 +55,23 @@ pub const ShufflingAllocator = struct {
         return self;
     }
 
+    pub fn deinit(self: *ShufflingAllocator) void {
+        inline for (0..NUM_SIZE_CLASSES) |i| {
+            self.size_class_mutexes[i].lock();
+            defer self.size_class_mutexes[i].unlock();
+
+            if (self.size_classes[i].active) {
+                for (self.size_classes[i].ptrs, 0..) |ptr, j| {
+                    if (ptr != null) {
+                        const actual_ptr = ptr.?;
+                        std.mem.Allocator.rawFree(self.underlying, actual_ptr[0..self.size_classes[i].size_class], .{ .alignment = @alignOf(usize) }, @returnAddress());
+                        self.size_classes[i].ptrs[j] = null;
+                    }
+                }
+            }
+        }
+    }
+
     pub fn allocator(self: *ShufflingAllocator) Allocator {
         return .{
             .ptr = self,
