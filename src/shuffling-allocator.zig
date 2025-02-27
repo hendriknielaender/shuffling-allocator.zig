@@ -60,26 +60,21 @@ pub const ShufflingAllocator = struct {
     }
 
     pub fn deinit(self: *ShufflingAllocator) void {
-        // Clean up any memory still in the shuffle arrays
+        // Clean up all memory still in the shuffle arrays
         inline for (0..NUM_SIZE_CLASSES) |i| {
             self.size_class_mutexes[i].lock();
             defer self.size_class_mutexes[i].unlock();
 
             if (self.size_classes[i].active) {
                 for (0..SHUFFLE_CAPACITY) |j| {
-                    const entry = self.size_classes[i].ptrs[j];
-                    if (entry) |slot| {
-                        // Free the memory regardless of is_freed status
-                        // This ensures we don't leak any memory
-                        std.mem.Allocator.rawFree(self.underlying, slot.ptr[0..self.size_classes[i].size_class], std.mem.Alignment.@"8", // Default alignment
-                            @returnAddress());
-
-                        // Clear the slot to prevent double-frees
+                    if (self.size_classes[i].ptrs[j]) |slot| {
+                        // Free ALL memory regardless of is_freed status
+                        std.mem.Allocator.rawFree(self.underlying, slot.ptr[0..self.size_classes[i].size_class], std.mem.Alignment.@"8", @returnAddress());
+                        // Clear the slot to prevent double-free
                         self.size_classes[i].ptrs[j] = null;
                     }
                 }
-
-                // Mark the size class as inactive
+                // Mark size class as inactive after cleanup
                 self.size_classes[i].active = false;
             }
         }
@@ -108,11 +103,10 @@ pub const ShufflingAllocator = struct {
         const tmp: *align(@alignOf(ShufflingAllocator)) anyopaque = @alignCast(self_ptr);
         const self: *ShufflingAllocator = @ptrCast(tmp);
 
-        // std.mem.Allocator doesn't promise len>0, so we do a quick check.
-        if (len == 0) return &[_]u8{}; // Zero-length slice.
+        // std.mem.Allocator doesn't promise len>0, so we do a quick check
+        if (len == 0) return &[_]u8{};
 
-        // If alignment > size_of(usize), skip shuffling => fallback:
-        // Conversion from enum to actual bytes: 1 << @intFromEnum(alignment)
+        // If alignment > size_of(usize), skip shuffling => fallback
         if ((@as(u64, 1) << @intFromEnum(alignment)) > @alignOf(usize)) {
             return std.mem.Allocator.rawAlloc(
                 self.underlying,
@@ -138,9 +132,7 @@ pub const ShufflingAllocator = struct {
         self.size_class_mutexes[class_index].lock();
         defer self.size_class_mutexes[class_index].unlock();
 
-        // Also lock our global mutex for rng. We keep these separate
-        // so multiple threads can operate on different size classes
-        // concurrently, but still protect the single rng_state:
+        // Also lock our global mutex for rng
         self.global_mutex.lock();
         const rand_i = randomIndex(&self.rng_state);
         self.global_mutex.unlock();
@@ -188,10 +180,10 @@ pub const ShufflingAllocator = struct {
         const tmp: *align(@alignOf(ShufflingAllocator)) anyopaque = @alignCast(self_ptr);
         const self: *ShufflingAllocator = @ptrCast(tmp);
 
-        // Zero-length means nothing to free.
+        // Zero-length means nothing to free
         if (memory.len == 0) return;
 
-        // If alignment is large, skip shuffle:
+        // If alignment is large, skip shuffle
         if ((@as(u64, 1) << @intFromEnum(alignment)) > @alignOf(usize)) {
             std.mem.Allocator.rawFree(
                 self.underlying,
@@ -204,7 +196,7 @@ pub const ShufflingAllocator = struct {
 
         const idx_opt = sizeClassIndex(memory.len);
         if (idx_opt == null) {
-            // out-of-range => skip shuffle
+            // Out-of-range => skip shuffle
             std.mem.Allocator.rawFree(
                 self.underlying,
                 memory,
@@ -219,19 +211,26 @@ pub const ShufflingAllocator = struct {
         defer self.size_class_mutexes[class_index].unlock();
 
         const sc = &self.size_classes[class_index];
-        std.debug.assert(sc.active);
+        if (!sc.active) {
+            // If the size class isn't active, just free directly
+            std.mem.Allocator.rawFree(
+                self.underlying,
+                memory,
+                alignment,
+                ret_addr,
+            );
+            return;
+        }
+
         std.debug.assert(sc.size_class == memory.len);
 
-        // Find the pointer in our shuffle array to mark it as freed
+        // Find the pointer in our shuffle array
         var ptr_found = false;
         var slot_index: usize = 0;
         for (sc.ptrs, 0..) |entry, i| {
             if (entry) |slot| {
                 if (slot.ptr == memory.ptr) {
-                    // Found the pointer - mark it as freed
-                    var updated_slot = slot;
-                    updated_slot.is_freed = true;
-                    sc.ptrs[i] = updated_slot;
+                    // Found the pointer
                     ptr_found = true;
                     slot_index = i;
                     break;
@@ -239,8 +238,7 @@ pub const ShufflingAllocator = struct {
             }
         }
 
-        // If we didn't find the pointer in our shuffle array, it must be from a fallback path
-        // or another mechanism, so we should free it directly
+        // If we didn't find the pointer, free it directly
         if (!ptr_found) {
             std.mem.Allocator.rawFree(
                 self.underlying,
@@ -251,14 +249,17 @@ pub const ShufflingAllocator = struct {
             return;
         }
 
+        // Mark the slot as freed
+        var updated_slot = sc.ptrs[slot_index].?;
+        updated_slot.is_freed = true;
+        sc.ptrs[slot_index] = updated_slot;
+
         // Now pick a random index to swap with
         self.global_mutex.lock();
         const rand_i = randomIndex(&self.rng_state);
         self.global_mutex.unlock();
 
-        // Only actual free memory if the slot we're swapping with contains a freed pointer
         const random_entry = sc.ptrs[rand_i];
-
         if (random_entry != null and random_entry.?.is_freed) {
             // Actually free the memory of the randomly selected slot
             std.mem.Allocator.rawFree(
@@ -267,7 +268,7 @@ pub const ShufflingAllocator = struct {
                 alignment,
                 ret_addr,
             );
-            // Clear the slot since we've freed it
+            // Clear the slot
             sc.ptrs[rand_i] = null;
         }
     }
