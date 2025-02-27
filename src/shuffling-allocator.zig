@@ -86,7 +86,6 @@ pub const ShufflingAllocator = struct {
         const tmp: *align(@alignOf(ShufflingAllocator)) anyopaque = @alignCast(self_ptr);
         const self: *ShufflingAllocator = @ptrCast(tmp);
 
-        // std.mem.Allocator doesn’t promise len>0, so we do a quick check.
         if (len == 0) return &[_]u8{}; // Zero-length slice.
 
         // If alignment > size_of(usize), skip shuffling => fallback:
@@ -135,14 +134,6 @@ pub const ShufflingAllocator = struct {
 
         // Swap with the random slot:
         const old_ptr = sc.ptrs[rand_i];
-        if (old_ptr == null) {
-            return new_ptr;
-        } else {
-            // unwrap
-            const non_null_ptr = old_ptr.?;
-            return non_null_ptr;
-        }
-
         sc.ptrs[rand_i] = new_ptr;
 
         // If that slot was empty, we return the new pointer.
@@ -150,10 +141,8 @@ pub const ShufflingAllocator = struct {
             return new_ptr;
         }
 
-        // If that slot was not empty, we return that old pointer’s slice.
-        // We do not free the new_ptr. We effectively “shuffle” them.
-        // Ensure the returned slice is exactly `len`.
-        return old_ptr[0..len];
+        // If that slot was not empty, we return that old pointer.
+        return old_ptr.?;
     }
 
     /// .free method.
