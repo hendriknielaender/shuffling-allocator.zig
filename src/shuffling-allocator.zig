@@ -68,11 +68,8 @@ pub const ShufflingAllocator = struct {
             if (self.size_classes[i].active) {
                 for (self.size_classes[i].ptrs) |entry| {
                     if (entry) |slot| {
-                        // Free all memory that hasn't been properly freed yet
-                        if (!slot.is_freed) {
-                            std.mem.Allocator.rawFree(self.underlying, slot.ptr[0..self.size_classes[i].size_class], std.mem.Alignment.@"8", // Use a reasonable default
-                                @returnAddress());
-                        }
+                        // Free ALL memory, regardless of freed status
+                        std.mem.Allocator.rawFree(self.underlying, slot.ptr[0..self.size_classes[i].size_class], std.mem.Alignment.@"8", @returnAddress());
                     }
                 }
             }
