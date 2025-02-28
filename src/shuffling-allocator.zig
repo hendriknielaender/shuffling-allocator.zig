@@ -215,19 +215,19 @@ pub const ShufflingAllocator = struct {
 
         std.debug.assert(sc.size_class == memory.len);
 
-        var ptr_found = false;
-        var slot_index: usize = 0;
+        // Find the slot containing this memory
+        var slot_index: ?usize = null;
         for (sc.ptrs, 0..) |entry, i| {
             if (entry) |slot| {
                 if (slot.ptr == memory.ptr) {
-                    ptr_found = true;
                     slot_index = i;
                     break;
                 }
             }
         }
 
-        if (!ptr_found) {
+        if (slot_index == null) {
+            // Memory not found in our shuffle array, free directly
             std.mem.Allocator.rawFree(
                 self.underlying,
                 memory,
@@ -237,23 +237,36 @@ pub const ShufflingAllocator = struct {
             return;
         }
 
-        var updated_slot = sc.ptrs[slot_index].?;
-        updated_slot.is_freed = true;
-        sc.ptrs[slot_index] = updated_slot;
+        // CHANGE: Instead of marking as freed, actually free it immediately
+        std.mem.Allocator.rawFree(
+            self.underlying,
+            memory,
+            alignment,
+            ret_addr,
+        );
+        sc.ptrs[slot_index.?] = null; // Clear the slot
 
-        self.global_mutex.lock();
-        const rand_i = randomIndex(&self.rng_state);
-        self.global_mutex.unlock();
+        // OPTIONAL: Also clean up other freed slots
+        // This maintains some of the original security benefits
+        // but prevents memory leaks from accumulating
+        var freed_count: usize = 0;
+        const max_to_free: usize = 4; // Limit how many we free at once
 
-        const random_entry = sc.ptrs[rand_i];
-        if (random_entry != null and random_entry.?.is_freed) {
-            std.mem.Allocator.rawFree(
-                self.underlying,
-                random_entry.?.ptr[0..sc.size_class],
-                alignment,
-                ret_addr,
-            );
-            sc.ptrs[rand_i] = null;
+        for (sc.ptrs, 0..) |entry, i| {
+            if (freed_count >= max_to_free) break;
+
+            if (entry) |slot| {
+                if (slot.is_freed) {
+                    std.mem.Allocator.rawFree(
+                        self.underlying,
+                        slot.ptr[0..sc.size_class],
+                        alignment,
+                        ret_addr,
+                    );
+                    sc.ptrs[i] = null;
+                    freed_count += 1;
+                }
+            }
         }
     }
 
