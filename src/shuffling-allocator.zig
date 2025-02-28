@@ -237,20 +237,16 @@ pub const ShufflingAllocator = struct {
             return;
         }
 
-        // CHANGE: Instead of marking as freed, actually free it immediately
         std.mem.Allocator.rawFree(
             self.underlying,
             memory,
             alignment,
             ret_addr,
         );
-        sc.ptrs[slot_index.?] = null; // Clear the slot
+        sc.ptrs[slot_index.?] = null;
 
-        // OPTIONAL: Also clean up other freed slots
-        // This maintains some of the original security benefits
-        // but prevents memory leaks from accumulating
         var freed_count: usize = 0;
-        const max_to_free: usize = 4; // Limit how many we free at once
+        const max_to_free: usize = 4;
 
         for (sc.ptrs, 0..) |entry, i| {
             if (freed_count >= max_to_free) break;
