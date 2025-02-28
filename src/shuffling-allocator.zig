@@ -52,8 +52,6 @@ pub const ShufflingAllocator = struct {
             self.size_class_mutexes[i] = .{};
         }
 
-        // Finally, set our own pointer. This must be done after we
-        // fill all fields.
         self.base.ptr = &self;
 
         return self;
@@ -68,13 +66,10 @@ pub const ShufflingAllocator = struct {
             if (self.size_classes[i].active) {
                 for (0..SHUFFLE_CAPACITY) |j| {
                     if (self.size_classes[i].ptrs[j]) |slot| {
-                        // Free ALL memory regardless of is_freed status
                         std.mem.Allocator.rawFree(self.underlying, slot.ptr[0..self.size_classes[i].size_class], std.mem.Alignment.@"8", @returnAddress());
-                        // Clear the slot to prevent double-free
                         self.size_classes[i].ptrs[j] = null;
                     }
                 }
-                // Mark size class as inactive after cleanup
                 self.size_classes[i].active = false;
             }
         }
@@ -92,7 +87,7 @@ pub const ShufflingAllocator = struct {
         .free = freeFn,
     };
 
-    /// Actual .alloc method.
+    /// Actual .alloc method. Must return ?[]u8 or null on OOM.
     fn allocFn(
         self_ptr: *anyopaque,
         len: usize,
@@ -137,6 +132,7 @@ pub const ShufflingAllocator = struct {
         const sc = &self.size_classes[class_index];
         sc.activateIfNeeded(len);
 
+        // Allocate from underlying:
         const new_ptr = std.mem.Allocator.rawAlloc(
             self.underlying,
             len,
@@ -144,18 +140,24 @@ pub const ShufflingAllocator = struct {
             ret_addr,
         ) orelse return null;
 
+        // Create a new slot entry for this allocation
         const new_slot = SlotEntry{
             .ptr = new_ptr,
             .is_freed = false,
         };
 
+        // Swap with the random slot:
         const old_entry = sc.ptrs[rand_i];
+
+        // Replace the random slot with our new allocation
         sc.ptrs[rand_i] = new_slot;
 
+        // If the random slot was empty, return the newly allocated pointer
         if (old_entry == null) {
             return new_ptr;
         }
 
+        // Otherwise return the old pointer (which is now shuffled)
         return old_entry.?.ptr;
     }
 
@@ -239,14 +241,12 @@ pub const ShufflingAllocator = struct {
         updated_slot.is_freed = true;
         sc.ptrs[slot_index] = updated_slot;
 
-        // Now pick a random index to swap with
         self.global_mutex.lock();
         const rand_i = randomIndex(&self.rng_state);
         self.global_mutex.unlock();
 
         const random_entry = sc.ptrs[rand_i];
         if (random_entry != null and random_entry.?.is_freed) {
-            // Actually free the memory of the randomly selected slot
             std.mem.Allocator.rawFree(
                 self.underlying,
                 random_entry.?.ptr[0..sc.size_class],
@@ -313,6 +313,7 @@ const ShuffleArray = struct {
     fn init(self: *ShuffleArray) void {
         self.active = false;
         self.size_class = 0;
+        // Zero out the pointer array:
         inline for (0..SHUFFLE_CAPACITY) |i| {
             self.ptrs[i] = null;
         }
