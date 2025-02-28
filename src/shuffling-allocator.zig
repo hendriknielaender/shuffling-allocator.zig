@@ -355,7 +355,8 @@ test "multi-threaded shuffling allocator example usage" {
     // Just a simple single-thread test. For multi-thread usage,
     // you can launch threads that do `alloc` / `free` concurrently.
     const gpa = std.heap.page_allocator;
-    const shuffler = ShufflingAllocator.create(gpa, 12345);
+    var shuffler = ShufflingAllocator.create(gpa, 12345);
+    defer shuffler.deinit();
     const alloc = shuffler.base;
 
     const ptr = try alloc.alloc(u8, 16);
@@ -370,7 +371,8 @@ test "multi-threaded shuffling allocator example usage" {
 
 test "map" {
     const gpa = std.heap.page_allocator;
-    const shuffler = ShufflingAllocator.create(gpa, 42);
+    var shuffler = ShufflingAllocator.create(gpa, 42);
+    defer shuffler.deinit();
     const alloc = shuffler.base;
 
     var hm = std.AutoHashMap(u32, u32).init(
@@ -388,7 +390,8 @@ test "map" {
 
 test "strings" {
     const gpa = std.heap.page_allocator;
-    const shuffler = ShufflingAllocator.create(gpa, 123);
+    var shuffler = ShufflingAllocator.create(gpa, 123);
+    defer shuffler.deinit();
     var alloc = shuffler.base;
 
     const text = try std.fmt.allocPrintZ(alloc, "foo, bar, {s}", .{"baz"});
@@ -400,7 +403,8 @@ test "strings" {
 
 test "test_larger_than_word_alignment" {
     const gpa = std.heap.page_allocator;
-    const shuffler = ShufflingAllocator.create(gpa, 0);
+    var shuffler = ShufflingAllocator.create(gpa, 0);
+    defer shuffler.deinit();
     const alloc = shuffler.base;
 
     inline for (0..100) |_| {
