@@ -66,7 +66,7 @@ pub const ShufflingAllocator = struct {
             if (self.size_classes[i].active) {
                 for (0..SHUFFLE_CAPACITY) |j| {
                     if (self.size_classes[i].ptrs[j]) |slot| {
-                        std.mem.Allocator.rawFree(self.underlying, slot.ptr[0..self.size_classes[i].size_class], std.mem.Alignment.@"8", @returnAddress());
+                        std.mem.Allocator.rawFree(self.underlying, slot.ptr[0..self.size_classes[i].size_class], @enumFromInt(3), @returnAddress());
                         self.size_classes[i].ptrs[j] = null;
                     }
                 }
@@ -83,8 +83,8 @@ pub const ShufflingAllocator = struct {
     const vtable: std.mem.Allocator.VTable = .{
         .alloc = allocFn,
         .resize = resizeFn,
-        .remap = remapFn,
         .free = freeFn,
+        .remap = remapFn,
     };
 
     /// Actual .alloc method. Must return ?[]u8 or null on OOM.
@@ -403,7 +403,7 @@ test "strings" {
     defer shuffler.deinit();
     var alloc = shuffler.base;
 
-    const text = try std.fmt.allocPrintZ(alloc, "foo, bar, {s}", .{"baz"});
+    const text = try std.fmt.allocPrint(alloc, "foo, bar, {s}", .{"baz"});
     defer alloc.free(text);
 
     const want = "foo, bar, baz";
@@ -418,7 +418,7 @@ test "test_larger_than_word_alignment" {
 
     inline for (0..100) |_| {
         // Align to 32 bytes
-        const ptr = try std.mem.Allocator.alignedAlloc(alloc, u8, 32, 1);
+        const ptr = try std.mem.Allocator.alignedAlloc(alloc, u8, @enumFromInt(5), 1);
         defer alloc.free(ptr);
 
         std.debug.assert(@intFromPtr(ptr.ptr) % 32 == 0);
