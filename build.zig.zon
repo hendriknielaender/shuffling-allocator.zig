@@ -1,6 +1,7 @@
 .{
-    .name = "shuffling-allocator",
-    .version = "0.1.2",
+    .name = .shuffling_allocator,
+    .version = "0.2.0",
+    .fingerprint = 0x9faf71f9165ad07f,
     .dependencies = .{},
     .paths = .{
         "build.zig",
